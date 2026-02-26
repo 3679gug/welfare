@@ -12,10 +12,15 @@ st.set_page_config(
     layout="wide", page_title="복지패널 데이터분석 시각화 대시보드", page_icon=img
 )
 
-# 한글 폰트 지정
-plt.rc("font", family="Malgun Gothic")
-# 마이너스 기호 깨짐 방지
+# 한글 폰트 및 마이너스 기호 설정
+import koreanize_matplotlib
+import matplotlib.font_manager as fm
+
+# Matplotlib 한글 폰트 설정
 plt.rcParams["axes.unicode_minus"] = False
+# Streamlit Cloud에서 한글이 깨지는 경우를 대비해 나눔고딕 등 기본 폰트 확인
+# koreanize_matplotlib가 대부분의 경우를 해결해주지만, 명시적으로 폰트 패밀리를 설정할 수 있습니다.
+plt.rcParams['font.family'] = 'NanumGothic'
 
 
 # 데이터 로드 함수
