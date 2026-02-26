@@ -7,7 +7,7 @@ import seaborn as sns
 from PIL import Image
 
 # 웹 페이지 타이틀
-img = Image.open("image/sample.png")
+img = Image.open("data/sample.png")
 st.set_page_config(
     layout="wide", page_title="복지패널 데이터분석 시각화 대시보드", page_icon=img
 )
