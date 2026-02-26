@@ -12,15 +12,24 @@ st.set_page_config(
     layout="wide", page_title="복지패널 데이터분석 시각화 대시보드", page_icon=img
 )
 
-# 마이너스 기호 깨짐 방지
+# 마이너스 기호 깨짐 방지 및 한글 폰트 설정
 plt.rcParams["axes.unicode_minus"] = False
+sns.set_theme(font="Malgun Gothic") # Local fallback
+try:
+    import koreanize_matplotlib
+except ImportError:
+    pass
 
 
 # 데이터 로드 함수
 # 캐시
 @st.cache_data
 def load_welfare(sav_path: str):
-    raw_welfare = pd.read_csv(sav_path)
+    # Try reading with utf-8, fallback to cp949 if it fails
+    try:
+        raw_welfare = pd.read_csv(sav_path, encoding='utf-8')
+    except UnicodeDecodeError:
+        raw_welfare = pd.read_csv(sav_path, encoding='cp949')
     welfare = raw_welfare.copy()
     welfare = welfare.rename(
         columns={
@@ -61,8 +70,13 @@ def load_welfare(sav_path: str):
         
     if "job_code" in welfare.columns:
         welfare["job_code"] = welfare["job_code"].replace(9999, np.nan)
-        job_list = pd.read_excel('data/welfare_2015_codebook.xlsx',
-                         sheet_name = '직종코드')
+        try:
+            job_list = pd.read_excel('data/welfare_2015_codebook.xlsx',
+                             sheet_name = '직종코드')
+        except FileNotFoundError:
+            # Fallback for different deployment structures
+            job_list = pd.read_excel('welfare_2015_codebook.xlsx',
+                             sheet_name = '직종코드')
         welfare =welfare.merge(job_list, how = 'left', on = 'job_code')
         
         return welfare
