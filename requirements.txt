@@ -6,3 +6,4 @@ seaborn
 Pillow
 openpyxl
 koreanize-matplotlib
+setuptools
