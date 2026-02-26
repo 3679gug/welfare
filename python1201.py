@@ -4,6 +4,7 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
+import koreanize_matplotlib
 from PIL import Image
 
 # 웹 페이지 타이틀
