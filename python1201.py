@@ -1,4 +1,3 @@
-# 전체코드
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -59,43 +58,14 @@ def load_welfare(sav_path: str):
                 return "young"
 
         welfare["age_group"] = welfare["age"].apply(age_group)
-
+        
     if "job_code" in welfare.columns:
-        welfare["job_code"] = np.where(
-            welfare["job_code"] == 9999, np.nan, welfare["job_code"]
-        )
-        job_list = pd.read_excel(
-            "data/welfare_2015_codebook.xlsx", sheet_name="직종코드"
-        )
-        welfare = welfare.merge(job_list, how="left", on="job_code")
-
-    if "religion" in welfare.columns:
-        welfare['religion'] = np.where(welfare['religion'] == 9, np.nan, welfare['religion'])
-        welfare['religion'] = welfare['religion'].map({1:'yes', 2:'no'})
-
-    if "marital_status" in welfare.columns:
-        def divorce_yn(marital_status):
-            if marital_status == 1:
-                return 'marriage'
-            elif marital_status == 3:
-                return 'divorce'
-            else:
-                return np.nan
-
-        welfare['marriage'] = welfare['marital_status'].apply(divorce_yn)
-
-    if "region_code" in welfare.columns:
-        region_list = pd.DataFrame({'region_code' : [1, 2, 3, 4, 5, 6, 7],
-                            'region'      : ['서울',
-                                             '수도권(인천/경기)',
-                                             '부산/경남/울산',
-                                             '대구/경북',
-                                             '대전/충남',
-                                             '강원/충북',
-                                             '광주/전남/전북/제주도']})
-        welfare = welfare.merge(region_list, how = 'left', on = 'region_code')
-
-    return welfare
+        welfare["job_code"] = welfare["job_code"].replace(9999, np.nan)
+        job_list = pd.read_excel('data/welfare_2015_codebook.xlsx',
+                         sheet_name = '직종코드')
+        welfare =welfare.merge(job_list, how = 'left', on = 'job_code')
+        
+        return welfare
 
 
 # 사이드바
@@ -149,42 +119,17 @@ if "age_group" in welfare.columns:
     )
 else:
     select_multi_age_group = "All"
-
-# 직업 필터
-# 여러 개 선택할 수 있는 multiselect
+    
+# 직업 코드 필터
 value_list = ["All"] + sorted(welfare["job"].dropna().unique().tolist())
 if "job" in welfare.columns:
-    select_multi_job = st.sidebar.multiselect(
+    select_multi_job= st.sidebar.multiselect(
         "확인하고 싶은 직업을 선택하세요(복수 선택 가능)",
         value_list,
     )
 else:
-    select_multi_job = "All"
+    select_multi_job = "All"    
 
-# 종교 필터
-if "religion" in welfare.columns:
-    value_list = ["All"] + sorted(welfare["religion"].dropna().unique().tolist())
-    select_religion = st.sidebar.selectbox("종교", value_list, index=0)
-else:
-    select_religion = "All"
-
-# 혼인 필터
-if "marriage" in welfare.columns:
-    value_list = ["All"] + sorted(welfare["marriage"].dropna().unique().tolist())
-    select_marriage = st.sidebar.selectbox("혼인", value_list, index=0)
-else:
-    select_marriage = "All"
-
-# 지역 필터
-# 여러 개 선택할 수 있는 multiselect
-value_list = ["All"] + sorted(welfare["region"].dropna().unique().tolist())
-if "region" in welfare.columns:
-    select_multi_region = st.sidebar.multiselect(
-        "확인하고 싶은 지역을 선택하세요(복수 선택 가능)",
-        value_list,
-    )
-else:
-    select_multi_region = "All"
 
 # 성별에 따른 월급 차이 - '성별에 따라 월급이 다를까?'
 st.subheader("1. 성별에 따른 월급 차이 - '성별에 따라 월급이 다를까?'")
@@ -307,7 +252,6 @@ st.subheader("4. 연령대 및 성별 월급 차이 - 성별 월급 차이는 �
 if (
     select_sex != "All"
     and select_multi_age_group != "All"
-    and "sex" in welfare.columns
     and "age_group" in welfare.columns
 ):
     tmp_welfare = welfare[
@@ -359,7 +303,7 @@ with col2:
 # 직업별 월급 차이 - 어떤 직업이 월급을 가장 많이 받을까?
 st.subheader("5. 직업별 월급 차이 - 어떤 직업이 월급을 가장 많이 받을까?")
 
-if select_multi_job != "All" and "job" in welfare.columns:
+if select_multi_job != "All" and "income" in welfare.columns:
     tmp_welfare = welfare[welfare["job"].isin(select_multi_job)]
     st.write("필터로 선택한 데이터 첫 5행")
     st.table(tmp_welfare.head())
@@ -375,10 +319,10 @@ with col1:
         top10 = job_income.sort_values("mean_income", ascending=False).head(10)
         # 시각화
         fig5, ax5 = plt.subplots()
-        sns.barplot(y="job", x="mean_income", data=top10)
-        plt.title("직업에 따른 상위 10개 평균 월급 막대 그래프")
-        plt.xlabel("직업")
-        plt.ylabel("평균 월급")
+        sns.lineplot(y="job", x="mean_income", data=top10, ax=ax5)
+        plt.title("직업에 따른 평균 월급 선 그래프")
+        plt.ylabel("직업")
+        plt.xlabel("평균 월급")
         st.pyplot(fig5)
     else:
         st.info("직업/월급 변수가 없어 해당 그래프를 표시할 수 없습니다.")
@@ -388,6 +332,7 @@ with col2:
         st.write(top10)
     else:
         st.write("변수 없음")
+
 
 # 성별 직업 빈도 - 성별로 어떤 직업이 가장 많을까?
 st.subheader("6. 성별 직업 빈도 - 성별로 어떤 직업이 가장 많을까?")
@@ -606,3 +551,4 @@ with col2:
         st.write(pivot_region_age_group.sort_values('old', ascending = False)[['young', 'middle', 'old']])
     else:
         st.write("변수 없음")
+
