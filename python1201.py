@@ -1,17 +1,19 @@
+# 전체코드
 import streamlit as st
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
-import koreanize_matplotlib
 from PIL import Image
 
 # 웹 페이지 타이틀
-img = Image.open("data/sample.png")
+img = Image.open("image/sample.png")
 st.set_page_config(
     layout="wide", page_title="복지패널 데이터분석 시각화 대시보드", page_icon=img
 )
 
+# 한글 폰트 지정
+plt.rc("font", family="Malgun Gothic")
 # 마이너스 기호 깨짐 방지
 plt.rcParams["axes.unicode_minus"] = False
 
@@ -58,14 +60,43 @@ def load_welfare(sav_path: str):
                 return "young"
 
         welfare["age_group"] = welfare["age"].apply(age_group)
-        
+
     if "job_code" in welfare.columns:
-        welfare["job_code"] = welfare["job_code"].replace(9999, np.nan)
-        job_list = pd.read_excel('data/welfare_2015_codebook.xlsx',
-                         sheet_name = '직종코드')
-        welfare =welfare.merge(job_list, how = 'left', on = 'job_code')
-        
-        return welfare
+        welfare["job_code"] = np.where(
+            welfare["job_code"] == 9999, np.nan, welfare["job_code"]
+        )
+        job_list = pd.read_excel(
+            "data/welfare_2015_codebook.xlsx", sheet_name="직종코드"
+        )
+        welfare = welfare.merge(job_list, how="left", on="job_code")
+
+    if "religion" in welfare.columns:
+        welfare['religion'] = np.where(welfare['religion'] == 9, np.nan, welfare['religion'])
+        welfare['religion'] = welfare['religion'].map({1:'yes', 2:'no'})
+
+    if "marital_status" in welfare.columns:
+        def divorce_yn(marital_status):
+            if marital_status == 1:
+                return 'marriage'
+            elif marital_status == 3:
+                return 'divorce'
+            else:
+                return np.nan
+
+        welfare['marriage'] = welfare['marital_status'].apply(divorce_yn)
+
+    if "region_code" in welfare.columns:
+        region_list = pd.DataFrame({'region_code' : [1, 2, 3, 4, 5, 6, 7],
+                            'region'      : ['서울',
+                                             '수도권(인천/경기)',
+                                             '부산/경남/울산',
+                                             '대구/경북',
+                                             '대전/충남',
+                                             '강원/충북',
+                                             '광주/전남/전북/제주도']})
+        welfare = welfare.merge(region_list, how = 'left', on = 'region_code')
+
+    return welfare
 
 
 # 사이드바
@@ -119,17 +150,42 @@ if "age_group" in welfare.columns:
     )
 else:
     select_multi_age_group = "All"
-    
-# 직업 코드 필터
+
+# 직업 필터
+# 여러 개 선택할 수 있는 multiselect
 value_list = ["All"] + sorted(welfare["job"].dropna().unique().tolist())
 if "job" in welfare.columns:
-    select_multi_job= st.sidebar.multiselect(
+    select_multi_job = st.sidebar.multiselect(
         "확인하고 싶은 직업을 선택하세요(복수 선택 가능)",
         value_list,
     )
 else:
-    select_multi_job = "All"    
+    select_multi_job = "All"
 
+# 종교 필터
+if "religion" in welfare.columns:
+    value_list = ["All"] + sorted(welfare["religion"].dropna().unique().tolist())
+    select_religion = st.sidebar.selectbox("종교", value_list, index=0)
+else:
+    select_religion = "All"
+
+# 혼인 필터
+if "marriage" in welfare.columns:
+    value_list = ["All"] + sorted(welfare["marriage"].dropna().unique().tolist())
+    select_marriage = st.sidebar.selectbox("혼인", value_list, index=0)
+else:
+    select_marriage = "All"
+
+# 지역 필터
+# 여러 개 선택할 수 있는 multiselect
+value_list = ["All"] + sorted(welfare["region"].dropna().unique().tolist())
+if "region" in welfare.columns:
+    select_multi_region = st.sidebar.multiselect(
+        "확인하고 싶은 지역을 선택하세요(복수 선택 가능)",
+        value_list,
+    )
+else:
+    select_multi_region = "All"
 
 # 성별에 따른 월급 차이 - '성별에 따라 월급이 다를까?'
 st.subheader("1. 성별에 따른 월급 차이 - '성별에 따라 월급이 다를까?'")
@@ -252,6 +308,7 @@ st.subheader("4. 연령대 및 성별 월급 차이 - 성별 월급 차이는 �
 if (
     select_sex != "All"
     and select_multi_age_group != "All"
+    and "sex" in welfare.columns
     and "age_group" in welfare.columns
 ):
     tmp_welfare = welfare[
@@ -303,7 +360,7 @@ with col2:
 # 직업별 월급 차이 - 어떤 직업이 월급을 가장 많이 받을까?
 st.subheader("5. 직업별 월급 차이 - 어떤 직업이 월급을 가장 많이 받을까?")
 
-if select_multi_job != "All" and "income" in welfare.columns:
+if select_multi_job != "All" and "job" in welfare.columns:
     tmp_welfare = welfare[welfare["job"].isin(select_multi_job)]
     st.write("필터로 선택한 데이터 첫 5행")
     st.table(tmp_welfare.head())
@@ -319,10 +376,10 @@ with col1:
         top10 = job_income.sort_values("mean_income", ascending=False).head(10)
         # 시각화
         fig5, ax5 = plt.subplots()
-        sns.lineplot(y="job", x="mean_income", data=top10, ax=ax5)
-        plt.title("직업에 따른 평균 월급 선 그래프")
-        plt.ylabel("직업")
-        plt.xlabel("평균 월급")
+        sns.barplot(y="job", x="mean_income", data=top10)
+        plt.title("직업에 따른 상위 10개 평균 월급 막대 그래프")
+        plt.xlabel("직업")
+        plt.ylabel("평균 월급")
         st.pyplot(fig5)
     else:
         st.info("직업/월급 변수가 없어 해당 그래프를 표시할 수 없습니다.")
@@ -333,16 +390,220 @@ with col2:
     else:
         st.write("변수 없음")
 
-
 # 성별 직업 빈도 - 성별로 어떤 직업이 가장 많을까?
 st.subheader("6. 성별 직업 빈도 - 성별로 어떤 직업이 가장 많을까?")
 
+if (
+    select_sex != "All"
+    and select_multi_job != "All"
+    and "sex" in welfare.columns
+    and "job" in welfare.columns
+):
+    tmp_welfare = welfare[
+        (welfare["sex"] == select_sex)
+        & (welfare["job"].isin(select_multi_job))
+    ]
+    st.write("필터로 선택한 데이터 첫 5행")
+    st.table(tmp_welfare.head())
+
+col1, col2 = st.columns([2, 1])
+with col1:
+    if (
+        "sex" in welfare.columns
+        and "job" in welfare.columns
+    ):
+        job_male = welfare[welfare['sex'] == 'male'].dropna(subset = ['job']) \
+                                            .groupby('job', as_index = False) \
+                                            .agg(n = ('job', 'count')) \
+                                            .sort_values('n', ascending = False) \
+                                            .head(10)
+        # 시각화
+        fig61, ax61 = plt.subplots()
+        sns.barplot(y = 'job', x = 'n', data = job_male, ax=ax61)
+        plt.title("남성 직업 빈도 막대 그래프")
+        plt.xlabel("빈도")
+        plt.ylabel("직업")
+        st.pyplot(fig61)
+    else:
+        st.info("성별/직업 변수가 없어 해당 그래프를 표시할 수 없습니다.")
+with col2:
+    st.markdown("테이블")
+    if (
+        "sex" in welfare.columns
+        and "job" in welfare.columns
+    ):
+        st.write(job_male)
+    else:
+        st.write("변수 없음")
+
+col1, col2 = st.columns([2, 1])
+with col1:
+    if (
+        "sex" in welfare.columns
+        and "job" in welfare.columns
+    ):
+        job_female = welfare[welfare['sex'] == 'female'].dropna(subset = ['job']) \
+                                                .groupby('job', as_index = False) \
+                                                .agg(n = ('job', 'count')) \
+                                                .sort_values('n', ascending = False) \
+                                                .head(10)
+        # 시각화
+        fig62, ax62 = plt.subplots()
+        sns.barplot(y = 'job', x = 'n', data = job_female, ax=ax62)
+        plt.title("여성 직업 빈도 막대 그래프")
+        plt.xlabel("빈도")
+        plt.ylabel("직업")
+        st.pyplot(fig62)
+    else:
+        st.info("성별/직업 변수가 없어 해당 그래프를 표시할 수 없습니다.")
+with col2:
+    st.markdown("테이블")
+    if (
+        "sex" in welfare.columns
+        and "job" in welfare.columns
+    ):
+        st.write(job_female)
+    else:
+        st.write("변수 없음")
 
 # 종교 유무에 따른 이혼율 - 종교가 있으면 이혼을 덜 할까?
 st.subheader("7. 종교 유무에 따른 이혼율 - 종교가 있으면 이혼을 덜 할까?")
 
+if select_religion != "All" and "religion" in welfare.columns and select_marriage != "All" and "marriage" in welfare.columns:
+    tmp_welfare = welfare[(welfare["religion"] == select_religion) & (welfare["marriage"] == select_marriage)]
+    st.write("필터로 선택한 데이터 첫 5행")
+    st.table(tmp_welfare.head())
+
+col1, col2 = st.columns([2, 1])
+with col1:
+    if "religion" in welfare.columns and "marriage" in welfare.columns:
+        religion_div = welfare.dropna(subset = ['religion', 'marriage']) \
+                      .groupby('religion', as_index = False) \
+                      ['marriage'] \
+                      .value_counts(normalize = True)
+        religion_div = religion_div[religion_div['marriage'] == 'divorce'] \
+               .assign(proportion = religion_div['proportion'] * 100) \
+               .round(2)
+        # 시각화
+        fig71, ax71 = plt.subplots()
+        sns.barplot(x = "religion", y = 'proportion', data = religion_div, ax=ax71)
+        plt.title("종교에 따른 이혼율 막대 그래프")
+        plt.xlabel("종교")
+        plt.ylabel("이혼율")
+        st.pyplot(fig71)
+    else:
+        st.info("종교/혼인 변수가 없어 해당 그래프를 표시할 수 없습니다.")
+with col2:
+    st.markdown("테이블")
+    if "religion" in welfare.columns and "marriage" in welfare.columns:
+        st.write(religion_div)
+    else:
+        st.write("변수 없음")
+
+col1, col2 = st.columns([2, 1])
+with col1:
+    if "age_group" in welfare.columns and "religion" in welfare.columns:
+        # 비율 계산
+        age_group_div = welfare.dropna(subset = ['age_group', 'religion']) \
+                        .groupby('age_group', as_index = False) \
+                        ['marriage'] \
+                        .value_counts(normalize = True)
+        age_group_div = age_group_div[(age_group_div['marriage'] == 'divorce') & (age_group_div['age_group'] != 'young')] \
+                             .assign(proportion = age_group_div['proportion'] * 100) \
+                             .round(2)
+        # 시각화
+        fig72, ax72 = plt.subplots()
+        sns.barplot(x = "age_group", y = 'proportion', data = age_group_div, ax=ax72)
+        plt.title("연령대에 따른 이혼율 막대 그래프")
+        plt.xlabel("연령대")
+        plt.ylabel("이혼율")
+        st.pyplot(fig72)
+    else:
+        st.info("연령대/혼인 변수가 없어 해당 그래프를 표시할 수 없습니다.")
+with col2:
+    st.markdown("테이블")
+    if "religion" in welfare.columns and "marriage" in welfare.columns:
+        st.write(age_group_div)
+    else:
+        st.write("변수 없음")
+
+col1, col2 = st.columns([2, 1])
+with col1:
+    if "age_group" in welfare.columns and "religion" in welfare.columns and "marriage" in welfare.columns:
+        # 비율 계산
+        age_group_rel_div = welfare[welfare['age_group'] != 'young'] \
+                      .dropna(subset = ['age_group', 'religion', 'marriage']) \
+                      .groupby(['age_group', 'religion'], as_index = False) \
+                       ['marriage'] \
+                       .value_counts(normalize = True)
+        age_group_rel_div = age_group_rel_div[age_group_rel_div['marriage'] == 'divorce'] \
+                    .assign(proportion = age_group_rel_div['proportion'] * 100) \
+                    .round(2)
+        # 시각화
+        fig73, ax73 = plt.subplots()
+        sns.barplot(x = 'age_group', y = 'proportion', hue = 'religion', data = age_group_rel_div, ax=ax73)
+        plt.title("연령대 및 종교 유무에 따른 이혼율 막대 그래프")
+        plt.xlabel("연령대 및 종교 유무")
+        plt.ylabel("이혼율")
+        st.pyplot(fig73)
+    else:
+        st.info("연령대/종교/혼인 변수가 없어 해당 그래프를 표시할 수 없습니다.")
+with col2:
+    st.markdown("테이블")
+    if "religion" in welfare.columns and "marriage" in welfare.columns:
+        st.write(age_group_rel_div)
+    else:
+        st.write("변수 없음")
+
 # 지역별 연령대 비율 - 어느 지역에 노년층이 많을까?
 st.subheader("8. 지역별 연령대 비율 - 어느 지역에 노년층이 많을까?")
 
+if (
+    select_multi_region != "All"
+    and select_multi_age_group != "All"
+    and "region" in welfare.columns
+    and "age_group" in welfare.columns
+):
+    tmp_welfare = welfare[
+        (welfare["region"].isin(select_multi_region))
+        & (welfare["age_group"].isin(select_multi_age_group))
+    ]
+    st.write("필터로 선택한 데이터 첫 5행")
+    st.table(tmp_welfare.head())
 
-# 끝
+col1, col2 = st.columns([2, 1])
+with col1:
+    if (
+        "region" in welfare.columns
+        and "age_group" in welfare.columns
+    ):
+        region_age_group = welfare.dropna(subset = ['age_group']) \
+                     .groupby('region', as_index = False) \
+                     ['age_group'] \
+                     .value_counts(normalize = True)
+        region_age_group = region_age_group.assign(proportion = region_age_group['proportion'] * 100) \
+                                   .round(2)
+        pivot_region_age_group = region_age_group[['region', 'age_group', 'proportion']] \
+                          .pivot(index   = 'region',
+                          columns = 'age_group',
+                          values  = 'proportion')
+        reorder_pivot_region_age_group = pivot_region_age_group.sort_values('old')[['young', 'middle', 'old']]
+        # 시각화
+        fig8, ax8 = plt.subplots()
+        reorder_pivot_region_age_group.plot.barh(stacked = True, ax=ax8)
+        plt.legend(bbox_to_anchor=(1.0, 1.0))
+        plt.title("지역별 연령대 비율 그래프")
+        plt.xlabel("연령대 비율")
+        plt.ylabel("지역")
+        st.pyplot(fig8)
+    else:
+        st.info("지역/연령대 변수가 없어 해당 그래프를 표시할 수 없습니다.")
+with col2:
+    st.markdown("테이블")
+    if (
+        "region" in welfare.columns
+        and "age_group" in welfare.columns
+    ):
+        st.write(pivot_region_age_group.sort_values('old', ascending = False)[['young', 'middle', 'old']])
+    else:
+        st.write("변수 없음")
