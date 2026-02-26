@@ -11,9 +11,10 @@ st.set_page_config(
     layout="wide", page_title="복지패널 데이터분석 시각화 대시보드", page_icon=img
 )
 
-# --- [1. 시각화 한글 폰트 설정] ---
-plt.rcParams['font.family'] = 'Malgun Gothic'
-plt.rcParams['axes.unicode_minus'] = False
+# 한글 폰트 지정
+plt.rc("font", family="Malgun Gothic")
+# 마이너스 기호 깨짐 방지
+plt.rcParams["axes.unicode_minus"] = False
 
 
 # 데이터 로드 함수
