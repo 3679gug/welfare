@@ -13,21 +13,24 @@ st.set_page_config(
 )
 
 # 마이너스 기호 깨짐 방지 및 한글 폰트 설정
-plt.rcParams["axes.unicode_minus"] = False
-sns.set_theme(font="Malgun Gothic") # Local fallback
+# koreanize_matplotlib을 먼저 임포트하여 전역 폰트를 설정합니다.
 try:
     import koreanize_matplotlib
 except ImportError:
     pass
+
+plt.rcParams["axes.unicode_minus"] = False
+# Seaborn의 폰트 매핑이 Matplotlib과 일치하도록 기본값 유지
+sns.set_theme(style="whitegrid")
 
 
 # 데이터 로드 함수
 # 캐시
 @st.cache_data
 def load_welfare(sav_path: str):
-    # Try reading with utf-8, fallback to cp949 if it fails
+    # Try reading with utf-8-sig (handles BOM), then fallback to cp949
     try:
-        raw_welfare = pd.read_csv(sav_path, encoding='utf-8')
+        raw_welfare = pd.read_csv(sav_path, encoding='utf-8-sig')
     except UnicodeDecodeError:
         raw_welfare = pd.read_csv(sav_path, encoding='cp949')
     welfare = raw_welfare.copy()
